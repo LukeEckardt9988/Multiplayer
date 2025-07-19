@@ -24,11 +24,48 @@ export class GameManager {
             console.error("Welt-Modell ('welt.glb') konnte nicht gefunden werden.");
         }
     }
+    
+    // --- KORRIGIERTE FUNKTION ---
+    setupWorldItems(itemsData) {
+        console.log("Erstelle Welt-Items:", itemsData);
 
+        itemsData.forEach(item => {
+            let modelShortName; // Wir verwenden jetzt den Kurznamen
+
+            if (item.type === 'weapon') {
+                // Der Kurzname ist der Name der Waffe, z.B. 'gewehr'
+                modelShortName = item.name;
+            } else if (item.type === 'ammo') {
+                // Der Kurzname für Munition ist 'munition'
+                modelShortName = 'munition';
+            }
+
+            if (!modelShortName) {
+                console.error(`Unbekannter Item-Typ: ${item.type}`);
+                return;
+            }
+
+            // Hole das Asset mit dem Kurznamen
+            const asset = this.assets.get(modelShortName);
+            if (asset) {
+                const itemObject = asset.scene.clone();
+                itemObject.position.set(item.position.x, item.position.y, item.position.z);
+                itemObject.userData.itemId = item.id;
+
+                this.worldItems.set(item.id, itemObject);
+                this.scene.add(itemObject);
+            } else {
+                // Diese Fehlermeldung hilft uns beim Debuggen
+                console.error(`Asset mit Kurznamen "${modelShortName}" nicht im AssetLoader gefunden!`);
+            }
+        });
+    }
+
+    // --- Die restlichen Funktionen bleiben unverändert ---
+    
     initializeSelf(data) {
         this.selfId = data.your_id;
         console.log(`Willkommen! Deine ID ist ${this.selfId}`);
-        // Wieder aktiviert:
         this.uiManager.updateHealth(data.state.health);
     }
 
@@ -74,7 +111,6 @@ export class GameManager {
 
     handlePlayerHit(hitData) {
         if (hitData.victim_id === this.selfId) {
-            // Wieder aktiviert:
             this.uiManager.updateHealth(hitData.victim_health);
             document.body.style.boxShadow = "inset 0 0 40px #ff0000";
             setTimeout(() => { document.body.style.boxShadow = "none"; }, 250);
@@ -107,49 +143,6 @@ export class GameManager {
             tracerMaterial.dispose();
         }, 100);
     }
-    /**
-    * NEU: Erstellt die 3D-Objekte für alle Items in der Welt.
-    * @param {Array} itemsData - Das Array mit Item-Daten vom Server.
-    */
-    setupWorldItems(itemsData) {
-        console.log("Erstelle Welt-Items:", itemsData);
-
-        // Hole die Item-Konfiguration vom Server
-        const itemConfig = {
-            'gewehr': { model: 'gewehr.glb' },
-            'pistole': { model: 'pistole.glb' },
-            'ammo': { model: 'monition.glb' }
-            // Du könntest diese Info auch vom Server schicken lassen
-        };
-
-        itemsData.forEach(item => {
-            let modelName;
-            if (item.type === 'weapon') {
-                modelName = itemConfig[item.name]?.model;
-            } else if (item.type === 'ammo') {
-                modelName = itemConfig.ammo.model;
-            }
-
-            if (!modelName) {
-                console.error(`Kein Modell für Item-Typ ${item.type} mit Namen ${item.name} gefunden.`);
-                return; // continue
-            }
-
-            const asset = this.assets.get(modelName);
-            if (asset) {
-                const itemObject = asset.scene.clone();
-                itemObject.position.set(item.position.x, item.position.y, item.position.z);
-
-                // Füge eine eindeutige ID zum 3D-Objekt hinzu, um es später zu identifizieren
-                itemObject.userData.itemId = item.id;
-
-                this.worldItems.set(item.id, itemObject);
-                this.scene.add(itemObject);
-            } else {
-                console.error(`Asset für Modell ${modelName} nicht gefunden!`);
-            }
-        });
-    }
-
-    update(delta) { }
+    
+    update(delta) {}
 }

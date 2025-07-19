@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mein Multiplayer Spiel</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="blocker">
+        <div id="instructions">
+            <p style="font-size:36px">Gib deinen Namen ein</p>
+            <input type="text" id="playerName" placeholder="Spielername" maxlength="15" style="padding: 10px; font-size: 20px; text-align: center; border: 2px solid white; background-color: rgba(0,0,0,0.5); color: white;">
+            <p style="font-size: 24px; cursor: pointer;" id="playButton">Klicken zum Spielen</p>
+            <p>
+                W, A, S, D = Bewegen<br/>
+                Maus = Umschauen
+            </p>
+        </div>
+    </div>
+
+    <div id="hud" style="display: none;">
+        <div id="health-container">
+            <span>HP</span>
+            <div id="health-bar"></div>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

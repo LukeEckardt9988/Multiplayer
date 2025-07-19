@@ -6,17 +6,20 @@ export class NetworkManager {
         this.onNewPlayer = null;
         this.onPlayerDisconnected = null;
         this.onPlayerMoved = null;
+        this.onWorldItems = null;
+
     }
 
-    setCallbacks(onWelcome, onCurrentPlayers, onNewPlayer, onPlayerDisconnected, onPlayerMoved) {
+    setCallbacks(onWelcome, onCurrentPlayers, onNewPlayer, onPlayerDisconnected, onPlayerMoved, onPlayerHit, onShotFired, onWorldItems) {
         this.onWelcome = onWelcome;
         this.onCurrentPlayers = onCurrentPlayers;
         this.onNewPlayer = onNewPlayer;
         this.onPlayerDisconnected = onPlayerDisconnected;
         this.onPlayerMoved = onPlayerMoved;
+        this.onWorldItems = onWorldItems;
     }
 
-      connect(url, playerName) {
+    connect(url, playerName) {
         // Wir hängen den Namen als Parameter an die URL an
         this.socket = new WebSocket(`${url}?name=${encodeURIComponent(playerName)}`);
 
@@ -41,6 +44,12 @@ export class NetworkManager {
                     break;
                 case 'player_moved':
                     this.onPlayerMoved(data.player);
+                    break;
+                case 'shot_fired':
+                    this.onShotFired(data);
+                    break;
+                case 'world_items':
+                    this.onWorldItems(data.items);
                     break;
             }
         };

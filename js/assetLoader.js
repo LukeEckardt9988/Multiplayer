@@ -8,12 +8,14 @@ export class AssetLoader {
         // Hier listen wir alle Modelle auf, die wir brauchen
         this.modelsToLoad = [
             { name: 'welt', url: 'models/welt.glb' },
-            //{ name: 'person0', url: 'models/person.glb' }, // Wir nennen sie person0, person1 etc.
+            //{ name: 'person0', url: 'models/person.glb' }, 
             { name: 'person1', url: 'models/person1.glb' },
             //{ name: 'person2', url: 'models/person2.glb' },
            // { name: 'person3', url: 'models/person3.glb' },
             { name: 'pistole', url: 'models/pistole.glb' },
-           // { name: 'munition', url: 'models/monition.glb' }, // Korrektur von "monition" zu "munition"
+            { name: 'munition', url: 'models/munition.glb' },
+            { name: 'gewehr', url: 'models/gewehr.glb' },
+
         ];
     }
 

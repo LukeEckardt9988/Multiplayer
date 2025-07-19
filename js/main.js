@@ -29,7 +29,8 @@ class Game {
                 (id) => this.gameManager.removePlayer(id),
                 (playerData) => this.gameManager.updatePlayerState(playerData),
                 (hitData) => this.gameManager.handlePlayerHit(hitData),
-                (shotData) => this.gameManager.handleShotFired(shotData)
+                (shotData) => this.gameManager.handleShotFired(shotData),
+                (items) => this.gameManager.setupWorldItems(items)
             );
             this.networkManager.connect('ws://127.0.0.1:8080', playerName);
 

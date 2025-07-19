@@ -57,7 +57,7 @@ export class PlayerController {
         // Bewegung relativ zur Blickrichtung
         if (this.keys.w || this.keys.s) {
             this.velocity.z = this.direction.z * this.moveSpeed * delta;
-            this.controls.moveForward(-this.velocity.z);
+            this.controls.moveForward(this.velocity.z);
         }
         if (this.keys.a || this.keys.d) {
             this.velocity.x = this.direction.x * this.moveSpeed * delta;

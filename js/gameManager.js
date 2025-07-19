@@ -6,6 +6,7 @@ export class GameManager {
         this.uiManager = uiManager;
         this.assets = null;
         this.players = new Map();
+        this.worldItems = new Map();
         this.selfId = null;
         this.camera = null;
     }
@@ -106,6 +107,49 @@ export class GameManager {
             tracerMaterial.dispose();
         }, 100);
     }
-    
-    update(delta) {}
+    /**
+    * NEU: Erstellt die 3D-Objekte für alle Items in der Welt.
+    * @param {Array} itemsData - Das Array mit Item-Daten vom Server.
+    */
+    setupWorldItems(itemsData) {
+        console.log("Erstelle Welt-Items:", itemsData);
+
+        // Hole die Item-Konfiguration vom Server
+        const itemConfig = {
+            'gewehr': { model: 'gewehr.glb' },
+            'pistole': { model: 'pistole.glb' },
+            'ammo': { model: 'monition.glb' }
+            // Du könntest diese Info auch vom Server schicken lassen
+        };
+
+        itemsData.forEach(item => {
+            let modelName;
+            if (item.type === 'weapon') {
+                modelName = itemConfig[item.name]?.model;
+            } else if (item.type === 'ammo') {
+                modelName = itemConfig.ammo.model;
+            }
+
+            if (!modelName) {
+                console.error(`Kein Modell für Item-Typ ${item.type} mit Namen ${item.name} gefunden.`);
+                return; // continue
+            }
+
+            const asset = this.assets.get(modelName);
+            if (asset) {
+                const itemObject = asset.scene.clone();
+                itemObject.position.set(item.position.x, item.position.y, item.position.z);
+
+                // Füge eine eindeutige ID zum 3D-Objekt hinzu, um es später zu identifizieren
+                itemObject.userData.itemId = item.id;
+
+                this.worldItems.set(item.id, itemObject);
+                this.scene.add(itemObject);
+            } else {
+                console.error(`Asset für Modell ${modelName} nicht gefunden!`);
+            }
+        });
+    }
+
+    update(delta) { }
 }

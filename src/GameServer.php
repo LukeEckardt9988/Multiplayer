@@ -18,10 +18,8 @@ class Vector3 {
 
     /**
      * Berechnet die Distanz zu einem anderen Vektor.
-     * @param Vector3 $v Der andere Vektor.
-     * @return float Die Distanz.
      */
-    public function distanceTo(Vector3 $v) {
+    public function distanceTo(Vector3 $v): float {
         $dx = $this->x - $v->x;
         $dy = $this->y - $v->y;
         $dz = $this->z - $v->z;
@@ -34,12 +32,62 @@ class Vector3 {
  */
 class GameServer implements MessageComponentInterface {
     protected $clients;
-    protected $playerStates; // Speichert den Live-Zustand aller Spieler
+    protected $playerStates;
+    protected $worldItems;
+    protected $gameConfig;
 
     public function __construct() {
         $this->clients = new \SplObjectStorage;
         $this->playerStates = [];
+        $this->worldItems = [];
+        
+        // Zentrale Konfiguration für alle Spiel-Elemente
+        $this->gameConfig = [
+            'weapons' => [
+                'pistole' => [
+                    'name' => 'Pistole',
+                    'model' => 'pistole.glb',
+                    'damage' => 10,
+                    'fire_rate_ms' => 400 // Schuss alle 400ms
+                ],
+                'gewehr' => [
+                    'name' => 'Gewehr',
+                    'model' => 'gewehr.glb',
+                    'damage' => 25,
+                    'fire_rate_ms' => 800 // Schuss alle 800ms
+                ],
+                // Hier kannst du deine 3 weiteren Waffen hinzufügen
+            ],
+            'ammo' => [
+                'model' => 'monition.glb',
+                'amount' => 15
+            ]
+        ];
+
+        $this->initializeWorldItems();
         echo "WebSocket Game-Server wurde erfolgreich gestartet.\n";
+    }
+
+    /**
+     * Füllt die Welt zu Beginn mit Items basierend auf der Konfiguration.
+     */
+    public function initializeWorldItems() {
+        // Lege eine Waffe auf die Karte
+        $this->worldItems[] = [
+            'id' => 'item_'.uniqid(),
+            'type' => 'weapon',
+            'name' => 'gewehr',
+            'position' => ['x' => 10, 'y' => 1, 'z' => 10]
+        ];
+
+        // Lege 5 Munitionspakete auf die Karte
+        for ($i = 0; $i < 5; $i++) {
+            $this->worldItems[] = [
+                'id' => 'item_'.uniqid(),
+                'type' => 'ammo',
+                'position' => ['x' => rand(-20, 20), 'y' => 1, 'z' => rand(-20, 20)]
+            ];
+        }
     }
 
     /**
@@ -49,36 +97,32 @@ class GameServer implements MessageComponentInterface {
         $this->clients->attach($conn);
         $sessionId = $conn->resourceId;
 
-        // Liest den Spielernamen aus der Verbindungs-URL (z.B. ws://host:8080?name=MeinName)
         $queryString = $conn->httpRequest->getUri()->getQuery();
         parse_str($queryString, $queryParams);
-        $playerName = trim($queryParams['name'] ?? 'Spieler_' . $sessionId);
-        $playerName = htmlspecialchars($playerName); // Sicherheitsmaßnahme
-
-        echo "Neue Verbindung von '{$playerName}' (ID: {$sessionId})\n";
+        $playerName = htmlspecialchars($queryParams['name'] ?? 'Spieler_' . $sessionId);
 
         // Erstellt den Anfangszustand für den neuen Spieler
         $this->playerStates[$sessionId] = [
             'id' => $sessionId,
             'name' => $playerName,
-            'model' => 'person1.glb', // Alle Spieler nutzen dieses Modell
-            'position' => ['x' => 0, 'y' => 1, 'z' => 5], // Feste Startposition
+            'model' => 'person1.glb',
+            'health' => 100,
+            'position' => ['x' => rand(-5, 5), 'y' => 1, 'z' => rand(-5, 5)],
             'rotation' => ['x' => 0, 'y' => 0, 'z' => 0],
-            'health' => 100
+            'equipped_weapon' => 'pistole',
+            'ammo' => 30,
+            'last_shot_timestamp' => 0 // Für Feuerraten-Check
         ];
 
-        // 1. Sende dem neuen Spieler seine eigene ID und seinen Zustand
-        $conn->send(json_encode(['type' => 'welcome', 'your_id' => $sessionId, 'state' => $this->playerStates[$sessionId]]));
+        echo "Neue Verbindung von '{$playerName}' (ID: {$sessionId})\n";
 
-        // 2. Sende dem neuen Spieler die Zustände aller anderen, bereits verbundenen Spieler
-        $conn->send(json_encode(['type' => 'current_players', 'players' => $this->playerStates]));
-
-        // 3. Informiere alle anderen Spieler über den neuen Spieler
-        foreach ($this->clients as $client) {
-            if ($conn !== $client) {
-                $client->send(json_encode(['type' => 'new_player', 'player' => $this->playerStates[$sessionId]]));
-            }
-        }
+        // Sende dem neuen Spieler seine eigenen Daten, alle Spieler und alle Welt-Items
+        $conn->send(json_encode(['type' => 'welcome', 'state' => $this->playerStates[$sessionId]]));
+        $conn->send(json_encode(['type' => 'current_players', 'players' => $this.playerStates]));
+        $conn->send(json_encode(['type' => 'world_items', 'items' => $this.worldItems]));
+        
+        // Informiere alle anderen über den neuen Spieler
+        $this->broadcast(json_encode(['type' => 'new_player', 'player' => $this->playerStates[$sessionId]]), $conn);
     }
 
     /**
@@ -86,22 +130,16 @@ class GameServer implements MessageComponentInterface {
      */
     public function onMessage(ConnectionInterface $from, $msg) {
         $senderId = $from->resourceId;
+        if (!isset($this->playerStates[$senderId])) return;
+
         $data = json_decode($msg, true);
         $type = $data['type'] ?? '';
 
         switch ($type) {
             case 'update_state':
-                if (isset($this->playerStates[$senderId])) {
-                    $this->playerStates[$senderId]['position'] = $data['position'];
-                    $this->playerStates[$senderId]['rotation'] = $data['rotation'];
-
-                    // Sende die neue Position an alle ANDEREN Clients
-                    foreach ($this->clients as $client) {
-                        if ($from !== $client) {
-                            $client->send(json_encode(['type' => 'player_moved', 'player' => $this->playerStates[$senderId]]));
-                        }
-                    }
-                }
+                $this->playerStates[$senderId]['position'] = $data['position'];
+                $this->playerStates[$senderId]['rotation'] = $data['rotation'];
+                $this->broadcast(json_encode(['type' => 'player_moved', 'player' => $this->playerStates[$senderId]]), $from);
                 break;
 
             case 'shoot':
@@ -111,51 +149,51 @@ class GameServer implements MessageComponentInterface {
     }
 
     /**
-     * Verarbeitet die Schuss-Logik.
+     * Verarbeitet die Schuss-Logik mit Feuerrate und dynamischem Schaden.
      */
     public function handleShoot($shooterId, $shootData) {
-        if (!isset($this->playerStates[$shooterId])) return;
+        $player = &$this->playerStates[$shooterId];
+        $weaponKey = $player['equipped_weapon'];
+        $weaponConfig = $this->gameConfig['weapons'][$weaponKey];
 
+        // 1. Feuerraten-Check (Server-seitig)
+        $now = microtime(true) * 1000;
+        if ($now - $player['last_shot_timestamp'] < $weaponConfig['fire_rate_ms']) {
+            return; // Zu schnell geschossen, der Server ignoriert den Schuss.
+        }
+        $player['last_shot_timestamp'] = $now;
+
+        $this->broadcast(json_encode(['type' => 'shot_fired', 'shooter_id' => $shooterId]));
+        
         $shotOrigin = new Vector3($shootData['position']['x'], $shootData['position']['y'], $shootData['position']['z']);
 
-        // Informiere alle Clients, dass ein Schuss abgefeuert wurde (für Effekte)
-        $this->broadcast(json_encode(['type' => 'shot_fired', 'shooter_id' => $shooterId]));
-
-        // Treffererkennung gegen alle anderen Spieler
-        foreach ($this->playerStates as $targetId => $targetState) {
-            if ($shooterId === $targetId) continue; // Man kann sich nicht selbst treffen
+        // 2. Treffererkennung
+        foreach ($this->playerStates as $targetId => &$targetState) {
+            if ($shooterId === $targetId) continue;
 
             $targetPosition = new Vector3($targetState['position']['x'], $targetState['position']['y'], $targetState['position']['z']);
-
-            // Vereinfachte Treffererkennung: Ist das Ziel nahe am Schützen?
-            // HINWEIS: Dies ist eine sehr einfache Methode. Echte Spiele nutzen Raycasting.
-            $distance = $shotOrigin->distanceTo($targetPosition);
-            if ($distance < 2.0) { // Ein großzügiger Hitbox-Radius von 2.0 Einheiten
-
-                // Reduziere die Gesundheit des Ziels
-                $newHealth = max(0, $targetState['health'] - 25); // 25 Schaden
-                $this->playerStates[$targetId]['health'] = $newHealth;
-
-                // Informiere alle über den Treffer
+            
+            // Sehr einfache Distanz-basierte Treffererkennung
+            if ($shotOrigin->distanceTo($targetPosition) < 2.0) {
+                
+                // 3. Schaden abziehen basierend auf der Waffe
+                $targetState['health'] = max(0, $targetState['health'] - $weaponConfig['damage']);
+                
                 $this->broadcast(json_encode([
                     'type' => 'player_hit',
                     'victim_id' => $targetId,
-                    'victim_health' => $newHealth,
+                    'victim_health' => $targetState['health'],
                     'shooter_id' => $shooterId
                 ]));
-
-                // Handle Tod und Respawn
-                if ($newHealth <= 0) {
-                    $this->playerStates[$targetId]['health'] = 100; // Gesundheit zurücksetzen
-                    $this->playerStates[$targetId]['position'] = ['x' => rand(-10, 10), 'y' => 1, 'z' => rand(-10, 10)]; // Neue Zufallsposition
-                    
-                    $this->broadcast(json_encode([
-                        'type' => 'player_respawned',
-                        'player' => $this->playerStates[$targetId]
-                    ]));
+                
+                // 4. Tod und Respawn behandeln
+                if ($targetState['health'] <= 0) {
+                    // Simpler Respawn für den Moment
+                    $targetState['health'] = 100;
+                    $targetState['position'] = ['x' => rand(-20, 20), 'y' => 1, 'z' => rand(-20, 20)];
+                    $this->broadcast(json_encode(['type' => 'player_respawned', 'player' => $targetState]));
                 }
-                // Ein Schuss trifft nur das erste Ziel in dieser einfachen Logik
-                break;
+                break; // Ein Schuss trifft nur ein Ziel.
             }
         }
     }
@@ -171,12 +209,8 @@ class GameServer implements MessageComponentInterface {
         } else {
             $playerName = "Unbekannt";
         }
-
         $this->clients->detach($conn);
-
-        // Informiere alle verbleibenden Spieler, dass jemand gegangen ist
         $this->broadcast(json_encode(['type' => 'player_disconnected', 'id' => $sessionId]));
-        
         echo "Verbindung von '{$playerName}' (ID: {$sessionId}) wurde getrennt.\n";
     }
 
@@ -191,9 +225,11 @@ class GameServer implements MessageComponentInterface {
     /**
      * Hilfsfunktion zum Senden einer Nachricht an alle verbundenen Clients.
      */
-    protected function broadcast($message) {
+    protected function broadcast($message, $exclude = null) {
         foreach ($this->clients as $client) {
-            $client->send($message);
+            if ($client !== $exclude) {
+                $client->send($message);
+            }
         }
     }
 }

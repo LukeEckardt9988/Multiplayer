@@ -10,7 +10,7 @@ export class GameManager {
         this.selfId = null;
         this.camera = null;
         this.raycaster = new THREE.Raycaster();
-        this.currentlyLookingAt = null; // Speichert die ID des Items, das wir ansehen
+        this.currentlyLookingAt = null;
     }
 
     setCamera(camera) {
@@ -27,63 +27,62 @@ export class GameManager {
         }
     }
 
-    /**
-     * Erstellt die 3D-Objekte für alle Items in der Welt.
-     */
     setupWorldItems(itemsData) {
-        // Zuerst alte Items entfernen, falls die Welt neu geladen wird
-        this.worldItems.forEach(item => this.scene.remove(item));
+        // Alte Items und Helfer entfernen
+        this.worldItems.forEach(item => {
+            this.scene.remove(item.helper);
+            this.scene.remove(item);
+        });
         this.worldItems.clear();
 
         itemsData.forEach(item => {
-            let modelShortName;
-            if (item.type === 'weapon') {
-                modelShortName = item.name; // z.B. 'gewehr'
-            } else if (item.type === 'ammo') {
-                modelShortName = 'munition';
-            }
-
+            let modelShortName = item.type === 'weapon' ? item.name : 'munition';
             const asset = this.assets.get(modelShortName);
+
             if (asset) {
                 const itemObject = asset.scene.clone();
                 itemObject.position.set(item.position.x, item.position.y, item.position.z);
 
-                // --- KORREKTUR: Skalierung anpassen, falls die Modelle zu klein sind ---
-                itemObject.scale.set(1.5, 1.5, 1.5); // Passe diese Werte bei Bedarf an
+                // =========================================================
+                // KORREKTUR: Wir machen die Modelle größer
+                // =========================================================
+                itemObject.scale.set(2, 2, 2); // Verdoppeln der Größe (passe dies bei Bedarf an)
 
-                // Speichere alle wichtigen Infos direkt im 3D-Objekt
                 itemObject.userData = {
                     itemId: item.id,
-                    itemName: item.name, // 'gewehr', 'pistole', etc.
-                    itemType: item.type  // 'weapon' oder 'ammo'
+                    itemName: item.name,
+                    itemType: item.type
                 };
 
+                // Erstelle einen sichtbaren pinken Würfel als Platzhalter
+                const helperGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+                const helperMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff });
+                const helperCube = new THREE.Mesh(helperGeometry, helperMaterial);
+                helperCube.position.copy(itemObject.position);
+                
+                // Wir speichern den Helfer, um ihn später entfernen zu können
+                itemObject.helper = helperCube;
+
                 this.worldItems.set(item.id, itemObject);
-                this.scene.add(itemObject);
+                this.scene.add(itemObject); // Füge das ECHTE Modell hinzu
+                this.scene.add(helperCube); // Füge den HELFER-Würfel hinzu
             } else {
                 console.error(`Asset mit Kurznamen "${modelShortName}" nicht im AssetLoader gefunden!`);
             }
         });
     }
 
-    /**
-     * Prüft, ob der Spieler ein Item ansieht und aktualisiert die UI.
-     */
+    // Die restlichen Funktionen bleiben unverändert...
     update(delta) {
         if (!this.camera) return;
-
         this.raycaster.setFromCamera({ x: 0, y: 0 }, this.camera);
         const intersects = this.raycaster.intersectObjects(Array.from(this.worldItems.values()), true);
-
         if (intersects.length > 0 && intersects[0].distance < 3) {
-            // Finde das korrekte Parent-Objekt, das unsere userData enthält
             let hitObject = intersects[0].object;
             while (hitObject.parent && !hitObject.userData.itemId) {
                 hitObject = hitObject.parent;
             }
-
             const { itemId, itemName, itemType } = hitObject.userData;
-
             if (this.currentlyLookingAt !== itemId) {
                 this.currentlyLookingAt = itemId;
                 const nameToShow = (itemName || itemType).charAt(0).toUpperCase() + (itemName || itemType).slice(1);
@@ -96,11 +95,8 @@ export class GameManager {
             }
         }
     }
-
-    // Die restlichen Funktionen (initializeSelf, addPlayer, etc.) bleiben unverändert
     initializeSelf(data) {
         this.selfId = data.state.id;
-        console.log(`Willkommen! Deine ID ist ${this.selfId}`);
         this.uiManager.updateHealth(data.state.health);
         const weaponName = data.state.equipped_weapon.charAt(0).toUpperCase() + data.state.equipped_weapon.slice(1);
         this.uiManager.updateWeaponInfo(weaponName, data.state.ammo);

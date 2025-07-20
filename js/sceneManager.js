@@ -1,23 +1,22 @@
 import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 
 export class SceneManager {
-    constructor() {
+ constructor() {
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x87ceeb); // Himmelblau
+        this.scene.background = new THREE.Color(0x87ceeb);
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        
-        // ==========================================
-        //  KORREKTUR HIER: Setze die Startposition
-        // ==========================================
-        this.camera.position.set(0, 1.7, 5); 
+        this.camera.position.set(0, 1.7, 5);
+
+        this.camera.layers.enable(0); // Welt-Layer
+        this.camera.layers.enable(1); // Waffen-Layer
 
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        this.renderer.autoClear = false;
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(this.renderer.domElement);
 
         this.clock = new THREE.Clock();
         this.setupLights();
-
         window.addEventListener('resize', () => this.onWindowResize(), false);
     }
 

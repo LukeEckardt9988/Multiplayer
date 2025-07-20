@@ -14,6 +14,7 @@ class Game {
         this.gameManager.setCamera(this.sceneManager.getCamera());
         this.networkManager = new NetworkManager();
         this.init();
+        window.game = this;
     }
 
     async init() {
@@ -36,9 +37,9 @@ class Game {
 
             this.playerController = new PlayerController(this.sceneManager.getCamera(), this.networkManager);
             this.playerController.enableControls();
-            
+
             this.uiManager.showHUD();
-            
+
             // ==========================================
             //  NEU: Starte die Debug-Ausgabe jede Sekunde
             // ==========================================
@@ -60,7 +61,7 @@ class Game {
         const playerPosition = this.sceneManager.getCamera().position;
         console.log(`%c--- DEBUG-INFO (aktualisiert jede Sekunde) ---`, 'color: yellow; font-weight: bold;');
         console.log(`Meine Position: X=${playerPosition.x.toFixed(1)}, Y=${playerPosition.y.toFixed(1)}, Z=${playerPosition.z.toFixed(1)}`);
-        
+
         console.log("--- Items in der Welt ---");
         if (this.gameManager.worldItems.size === 0) {
             console.log("Keine Items vom Server empfangen oder platziert.");
@@ -71,7 +72,7 @@ class Game {
         this.gameManager.worldItems.forEach((itemObject, itemId) => {
             const itemPosition = itemObject.position;
             const distance = playerPosition.distanceTo(itemPosition);
-            
+
             console.log(
                 `Item [${itemObject.userData.itemId.substring(0, 10)}] ` +
                 `an Position: { X: ${itemPosition.x}, Y: ${itemPosition.y}, Z: ${itemPosition.z} } | ` +
@@ -84,10 +85,21 @@ class Game {
         requestAnimationFrame(() => this.animate());
         const delta = this.sceneManager.getClock().getDelta();
         if (this.playerController && this.playerController.controls.isLocked) {
-             this.playerController.update(delta);
+            this.playerController.update(delta);
         }
         this.gameManager.update(delta);
         this.sceneManager.getRenderer().render(this.sceneManager.getScene(), this.sceneManager.getCamera());
+    }
+    /**
+    * NEU: Wird vom PlayerController aufgerufen, wenn 'E' gedrückt wird.
+    */
+    requestItemPickup() {
+        // Prüfe, ob wir gerade ein Item ansehen
+        const itemId = this.gameManager.currentlyLookingAt;
+        if (itemId) {
+            console.log(`Fordere an, Item ${itemId} aufzuheben...`);
+            this.networkManager.sendPickupRequest(itemId);
+        }
     }
 }
 

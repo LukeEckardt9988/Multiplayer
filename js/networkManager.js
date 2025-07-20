@@ -73,4 +73,16 @@ export class NetworkManager {
             this.socket.send(JSON.stringify(message));
         }
     }
+    /**
+    * NEU: Sendet eine Anfrage zum Aufheben eines Items an den Server.
+    */
+    sendPickupRequest(itemId) {
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            const message = {
+                type: 'pickup_item',
+                id: itemId
+            };
+            this.socket.send(JSON.stringify(message));
+        }
+    }
 }

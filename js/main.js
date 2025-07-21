@@ -40,9 +40,9 @@ class Game {
 
             this.playerController = new PlayerController(this.sceneManager.getCamera(), this.networkManager);
             this.playerController.enableControls();
-            
+
             this.uiManager.showHUD();
-            
+
             this.animate();
         });
     }
@@ -58,9 +58,11 @@ class Game {
         requestAnimationFrame(() => this.animate());
         const delta = this.sceneManager.getClock().getDelta();
         if (this.playerController && this.playerController.controls.isLocked) {
-             this.playerController.update(delta);
+            this.playerController.update(delta);
         }
         this.gameManager.update(delta);
+
+        // Zurück zur einfachen, stabilen Render-Methode
         this.sceneManager.getRenderer().render(this.sceneManager.getScene(), this.sceneManager.getCamera());
     }
 }

@@ -11,10 +11,17 @@ export class GameManager {
         this.camera = null;
         this.raycaster = new THREE.Raycaster();
         this.currentlyLookingAt = null;
+
+        // NEU: Logik zur Waffenhaltung
+        this.weaponHolder = new THREE.Group(); // Eine Gruppe, die an der Kamera hängt
+        this.currentWeaponObject = null;       // Das aktuell sichtbare Waffen-3D-Modell
+        this.currentWeaponName = '';           // Der Name der aktuell ausgerüsteten Waffe
     }
 
     setCamera(camera) {
         this.camera = camera;
+        // Die Waffenhalterung wird direkt an die Kamera gehängt
+        this.camera.add(this.weaponHolder);
     }
 
     setAssets(assets) {
@@ -27,10 +34,75 @@ export class GameManager {
         }
     }
 
+    // NEU: Kernfunktion zum Ausrüsten einer Waffe
+    equipWeapon(weaponName) {
+        if (this.currentWeaponName === weaponName || !weaponName) {
+            return;
+        }
+
+        if (this.currentWeaponObject) {
+            this.weaponHolder.remove(this.currentWeaponObject);
+        }
+
+        const weaponAsset = this.assets.get(weaponName);
+        if (weaponAsset) {
+            this.currentWeaponObject = weaponAsset.scene.clone();
+
+            // NEU: Der eigentliche Trick
+            this.currentWeaponObject.traverse(child => {
+                if (child.isMesh) {
+                    // Sag dem Material, es soll den Tiefentest ignorieren.
+                    // Das bedeutet, es wird immer im Vordergrund gezeichnet.
+                    child.material.depthTest = false;
+                }
+            });
+
+            this.currentWeaponObject.position.set(0.15, -0.15, -0.3);
+            this.currentWeaponObject.rotation.y = Math.PI;
+
+            this.weaponHolder.add(this.currentWeaponObject);
+            this.currentWeaponName = weaponName;
+            console.log(`Waffe ausgerüstet: ${weaponName}`);
+        } else {
+            console.error(`Waffen-Asset '${weaponName}' nicht gefunden!`);
+        }
+    }
+
+
+    initializeSelf(data) {
+        this.selfId = data.state.id;
+        this.uiManager.updateHealth(data.state.health);
+
+        // Die Startwaffe direkt beim Betreten des Spiels ausrüsten
+        const initialWeapon = data.state.equipped_weapon;
+        this.equipWeapon(initialWeapon);
+
+        // HUD aktualisieren
+        const weaponName = initialWeapon.charAt(0).toUpperCase() + initialWeapon.slice(1);
+        this.uiManager.updateWeaponInfo(weaponName, data.state.ammo);
+    }
+
+    updatePlayerStateFromServer(newState) {
+        if (newState.id === this.selfId) {
+            this.uiManager.updateHealth(newState.health);
+
+            // Prüfen, ob sich die Waffe geändert hat und ggf. das Modell austauschen
+            if (this.currentWeaponName !== newState.equipped_weapon) {
+                this.equipWeapon(newState.equipped_weapon);
+            }
+
+            const weaponName = newState.equipped_weapon.charAt(0).toUpperCase() + newState.equipped_weapon.slice(1);
+            this.uiManager.updateWeaponInfo(weaponName, newState.ammo);
+        }
+    }
+
+    // Ersetze deine bisherige setupWorldItems-Funktion mit dieser.
     setupWorldItems(itemsData) {
-        // Alte Items und Helfer entfernen
+        // Alte Items und Marker entfernen
         this.worldItems.forEach(item => {
-            this.scene.remove(item.helper);
+            if (item.marker) { // Prüft, ob ein Marker existiert
+                this.scene.remove(item.marker);
+            }
             this.scene.remove(item);
         });
         this.worldItems.clear();
@@ -43,10 +115,8 @@ export class GameManager {
                 const itemObject = asset.scene.clone();
                 itemObject.position.set(item.position.x, item.position.y, item.position.z);
 
-                // =========================================================
-                // KORREKTUR: Wir machen die Modelle größer
-                // =========================================================
-                itemObject.scale.set(2, 2, 2); // Verdoppeln der Größe (passe dies bei Bedarf an)
+                // Wir machen die aufhebbaren Modelle deutlich größer
+                itemObject.scale.set(3, 3, 3);
 
                 itemObject.userData = {
                     itemId: item.id,
@@ -54,25 +124,30 @@ export class GameManager {
                     itemType: item.type
                 };
 
-                // Erstelle einen sichtbaren pinken Würfel als Platzhalter
-                const helperGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-                const helperMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff });
-                const helperCube = new THREE.Mesh(helperGeometry, helperMaterial);
-                helperCube.position.copy(itemObject.position);
-                
-                // Wir speichern den Helfer, um ihn später entfernen zu können
-                itemObject.helper = helperCube;
+                // NEU: Ein sichtbarer Marker, der über dem Item schwebt
+                const markerGeometry = new THREE.SphereGeometry(0.2, 16, 8);
+                // Leuchtendes Material, das nicht von Licht beeinflusst wird
+                const markerMaterial = new THREE.MeshBasicMaterial({
+                    color: item.type === 'weapon' ? 0xffd700 : 0x00c8ff, // Gold für Waffen, Blau für Munition
+                    transparent: true,
+                    opacity: 0.7
+                });
+                const markerMesh = new THREE.Mesh(markerGeometry, markerMaterial);
+                markerMesh.position.copy(itemObject.position);
+                markerMesh.position.y += 0.7; // Lässt den Marker leicht schweben
+
+                // Wir verknüpfen den Marker mit dem Item, um ihn später entfernen zu können
+                itemObject.marker = markerMesh;
 
                 this.worldItems.set(item.id, itemObject);
-                this.scene.add(itemObject); // Füge das ECHTE Modell hinzu
-                this.scene.add(helperCube); // Füge den HELFER-Würfel hinzu
+                this.scene.add(itemObject); // Füge das 3D-Modell hinzu
+                this.scene.add(markerMesh); // Füge den sichtbaren Marker hinzu
             } else {
-                console.error(`Asset mit Kurznamen "${modelShortName}" nicht im AssetLoader gefunden!`);
+                console.error(`Asset für "${modelShortName}" nicht gefunden!`);
             }
         });
     }
 
-    // Die restlichen Funktionen bleiben unverändert...
     update(delta) {
         if (!this.camera) return;
         this.raycaster.setFromCamera({ x: 0, y: 0 }, this.camera);
@@ -82,11 +157,13 @@ export class GameManager {
             while (hitObject.parent && !hitObject.userData.itemId) {
                 hitObject = hitObject.parent;
             }
-            const { itemId, itemName, itemType } = hitObject.userData;
-            if (this.currentlyLookingAt !== itemId) {
-                this.currentlyLookingAt = itemId;
-                const nameToShow = (itemName || itemType).charAt(0).toUpperCase() + (itemName || itemType).slice(1);
-                this.uiManager.showInteractionPrompt(`[E] ${nameToShow} aufheben`);
+            if (hitObject.userData.itemId) {
+                const { itemId, itemName, itemType } = hitObject.userData;
+                if (this.currentlyLookingAt !== itemId) {
+                    this.currentlyLookingAt = itemId;
+                    const nameToShow = (itemName || itemType).charAt(0).toUpperCase() + (itemName || itemType).slice(1);
+                    this.uiManager.showInteractionPrompt(`[E] ${nameToShow} aufheben`);
+                }
             }
         } else {
             if (this.currentlyLookingAt !== null) {
@@ -95,12 +172,26 @@ export class GameManager {
             }
         }
     }
-    initializeSelf(data) {
-        this.selfId = data.state.id;
-        this.uiManager.updateHealth(data.state.health);
-        const weaponName = data.state.equipped_weapon.charAt(0).toUpperCase() + data.state.equipped_weapon.slice(1);
-        this.uiManager.updateWeaponInfo(weaponName, data.state.ammo);
+
+    removeItemFromWorld(itemId) {
+        if (this.worldItems.has(itemId)) {
+            const itemObject = this.worldItems.get(itemId);
+
+            // NEU: Entferne auch den zugehörigen Marker
+            if (itemObject.marker) {
+                this.scene.remove(itemObject.marker);
+            }
+
+            this.scene.remove(itemObject);
+            this.worldItems.delete(itemId);
+
+            // Verstecke die Interaktions-Nachricht
+            this.uiManager.hideInteractionPrompt();
+            this.currentlyLookingAt = null;
+        }
     }
+
+    // --- Die anderen Funktionen bleiben unverändert ---
     initializeOtherPlayers(playersData) { for (const id in playersData) { if (playersData.hasOwnProperty(id) && id != this.selfId) { this.addPlayer(playersData[id]); } } }
     addPlayer(playerData) { if (this.players.has(playerData.id) || playerData.id == this.selfId) return; const modelName = playerData.model.replace('.glb', ''); const playerAsset = this.assets.get(modelName); if (playerAsset) { const playerObject = playerAsset.scene.clone(); playerObject.position.set(playerData.position.x, playerData.position.y, playerData.position.z); const euler = new THREE.Euler(0, playerData.rotation.y, 0, 'YXZ'); playerObject.quaternion.setFromEuler(euler); this.players.set(playerData.id, playerObject); this.scene.add(playerObject); } }
     removePlayer(playerId) { if (this.players.has(playerId)) { const playerObject = this.players.get(playerId); this.scene.remove(playerObject); this.players.delete(playerId); } }

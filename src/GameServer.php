@@ -50,7 +50,10 @@ class GameServer implements MessageComponentInterface
 
     public function initializeWorldItems()
     {
+        // Diese Zeile fügt das Gewehr hinzu. Stelle sicher, dass sie da ist!
         $this->worldItems[] = ['id' => 'item_' . uniqid(), 'type' => 'weapon', 'name' => 'gewehr', 'position' => ['x' => 10, 'y' => 1, 'z' => 10]];
+
+        // Diese Schleife fügt 5 Munitionspakete hinzu.
         for ($i = 0; $i < 5; $i++) {
             $this->worldItems[] = ['id' => 'item_' . uniqid(), 'type' => 'ammo', 'position' => ['x' => rand(-20, 20), 'y' => 1, 'z' => rand(-20, 20)]];
         }
@@ -113,26 +116,30 @@ class GameServer implements MessageComponentInterface
     {
         $player = &$this->playerStates[$playerId];
         $itemIndex = -1;
-
         foreach ($this->worldItems as $index => $item) {
             if ($item['id'] === $itemId) {
                 $itemIndex = $index;
                 break;
             }
         }
-
         if ($itemIndex === -1) return;
 
         $item = $this->worldItems[$itemIndex];
-
         $playerPosition = new Vector3($player['position']['x'], $player['position']['y'], $player['position']['z']);
         $itemPosition = new Vector3($item['position']['x'], $item['position']['y'], $item['position']['z']);
-        if ($playerPosition->distanceTo($itemPosition) > 3) {
-            return;
-        }
+
+        if ($playerPosition->distanceTo($itemPosition) > 3) return;
+
+        $itemToDrop = null;
 
         if ($item['type'] === 'weapon') {
-            // TODO: Alte Waffe fallen lassen
+            $currentWeaponName = $player['equipped_weapon'];
+            $itemToDrop = [
+                'id' => 'item_' . uniqid(),
+                'type' => 'weapon',
+                'name' => $currentWeaponName,
+                'position' => $player['position']
+            ];
             $player['equipped_weapon'] = $item['name'];
         } elseif ($item['type'] === 'ammo') {
             $player['ammo'] += $this->gameConfig['ammo']['amount'];
@@ -140,6 +147,13 @@ class GameServer implements MessageComponentInterface
 
         array_splice($this->worldItems, $itemIndex, 1);
         $this->broadcast(json_encode(['type' => 'item_removed', 'id' => $itemId]));
+
+        if ($itemToDrop !== null) {
+            $this->worldItems[] = $itemToDrop;
+
+            // HIER IST DIE KORREKTUR: Punkt durch Pfeil ersetzt
+            $this->broadcast(json_encode(['type' => 'new_item_spawned', 'item' => $itemToDrop]));
+        }
 
         foreach ($this->clients as $client) {
             if ($client->resourceId == $playerId) {

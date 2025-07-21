@@ -11,7 +11,14 @@ export class SceneManager {
         this.camera.layers.enable(1); // Waffen-Layer
 
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
-        this.renderer.autoClear = false;
+        
+        // =======================================================
+        // HIER IST DIE DEFINITIVE KORREKTUR
+        // Diese Einstellung MUSS 'true' sein, damit die Waffe
+        // und andere Objekte korrekt gezeichnet werden können.
+        // =======================================================
+        this.renderer.autoClear = true; 
+
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(this.renderer.domElement);
 

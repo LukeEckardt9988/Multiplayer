@@ -33,10 +33,11 @@ class Game {
                 (hitData) => this.gameManager.handlePlayerHit(hitData),
                 (shotData) => this.gameManager.handleShotFired(shotData),
                 (items) => this.gameManager.setupWorldItems(items),
-                (itemId) => this.gameManager.removeItemFromWorld(itemId), // Diese Zeilen müssen noch implementiert werden
-                (newState) => this.gameManager.updatePlayerStateFromServer(newState) // Diese auch
+                (itemId) => this.gameManager.removeItemFromWorld(itemId),
+                (newState) => this.gameManager.updatePlayerStateFromServer(newState),
+                (item) => this.gameManager.spawnNewItem(item)
             );
-            this.networkManager.connect('ws://127.0.0.1:8080', playerName);
+            this.networkManager.connect(`ws://${window.location.hostname}:8080`, playerName);
 
             this.playerController = new PlayerController(this.sceneManager.getCamera(), this.networkManager);
             this.playerController.enableControls();
@@ -62,7 +63,7 @@ class Game {
         }
         this.gameManager.update(delta);
 
-        // Zurück zur einfachen, stabilen Render-Methode
+        // Die einfachste und stabilste Render-Methode:
         this.sceneManager.getRenderer().render(this.sceneManager.getScene(), this.sceneManager.getCamera());
     }
 }
